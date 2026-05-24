@@ -28,11 +28,7 @@ from sklearn.metrics import (
 )
 
 # Hugging Face
-from huggingface_hub import (
-    HfApi,
-    create_repo
-)
-
+from huggingface_hub import HfApi, create_repo
 from huggingface_hub.utils import RepositoryNotFoundError
 
 # ==========================================
@@ -40,51 +36,42 @@ from huggingface_hub.utils import RepositoryNotFoundError
 # ==========================================
 
 mlflow.set_tracking_uri("http://localhost:5000")
-
-mlflow.set_experiment(
-    "Tourism_Package_Prediction_Experiment"
-)
+mlflow.set_experiment("Tourism_Package_Prediction_Experiment")
 
 # ==========================================
 # Initialize Hugging Face API
 # ==========================================
 
-api = HfApi(
-    token=os.getenv("HF_TOKEN")
-)
+api = HfApi(token=os.getenv("HF_TOKEN"))
+
+dataset_repo_id = "RahulGolande/tourism-package-prediction"
+
 # ==========================================
-# Load Processed Local Datasets
+# Load Processed Datasets Directly from Hugging Face
+# (Rubric requirement: load from HF data space)
 # ==========================================
 
-Xtrain = pd.read_csv(
-    "tourism_project/data/Xtrain.csv"
+hf_base_url = (
+    f"https://huggingface.co/datasets/{dataset_repo_id}/resolve/main"
 )
 
-Xtest = pd.read_csv(
-    "tourism_project/data/Xtest.csv"
-)
-
-ytrain = pd.read_csv(
-    "tourism_project/data/ytrain.csv"
-)
-
-ytest = pd.read_csv(
-    "tourism_project/data/ytest.csv"
-)
+Xtrain = pd.read_csv(f"{hf_base_url}/Xtrain.csv")
+Xtest  = pd.read_csv(f"{hf_base_url}/Xtest.csv")
+ytrain = pd.read_csv(f"{hf_base_url}/ytrain.csv")
+ytest  = pd.read_csv(f"{hf_base_url}/ytest.csv")
 
 # Convert target to series
 ytrain = ytrain.squeeze()
+ytest  = ytest.squeeze()
 
-ytest = ytest.squeeze()
-
-print("Processed datasets loaded successfully!")
+print("Processed datasets loaded from Hugging Face successfully!")
 
 # ==========================================
 # Define Feature Categories
+# (Categorical cols remain as strings — encoded in pipeline)
 # ==========================================
 
 numeric_features = [
-
     'Age',
     'CityTier',
     'NumberOfPersonVisiting',
@@ -100,7 +87,6 @@ numeric_features = [
 ]
 
 categorical_features = [
-
     'TypeofContact',
     'Occupation',
     'Gender',
@@ -114,11 +100,8 @@ categorical_features = [
 # ==========================================
 
 preprocessor = make_column_transformer(
-
     (StandardScaler(), numeric_features),
-
-    (OneHotEncoder(handle_unknown='ignore'),
-     categorical_features)
+    (OneHotEncoder(handle_unknown='ignore'), categorical_features)
 )
 
 # ==========================================
@@ -126,9 +109,7 @@ preprocessor = make_column_transformer(
 # ==========================================
 
 xgb_model = XGBClassifier(
-
     random_state=42,
-
     eval_metric='logloss'
 )
 
@@ -137,15 +118,10 @@ xgb_model = XGBClassifier(
 # ==========================================
 
 param_grid = {
-
     'xgbclassifier__n_estimators': [100, 200],
-
     'xgbclassifier__max_depth': [3, 5],
-
     'xgbclassifier__learning_rate': [0.01, 0.1],
-
     'xgbclassifier__subsample': [0.8, 1.0],
-
     'xgbclassifier__colsample_bytree': [0.8, 1.0]
 }
 
@@ -153,12 +129,7 @@ param_grid = {
 # Create ML Pipeline
 # ==========================================
 
-model_pipeline = make_pipeline(
-
-    preprocessor,
-
-    xgb_model
-)
+model_pipeline = make_pipeline(preprocessor, xgb_model)
 
 # ==========================================
 # MLflow Experiment Tracking
@@ -171,15 +142,10 @@ with mlflow.start_run():
     # ======================================
 
     grid_search = GridSearchCV(
-
         estimator=model_pipeline,
-
         param_grid=param_grid,
-
         cv=3,
-
         n_jobs=-1,
-
         scoring='f1'
     )
 
@@ -194,80 +160,46 @@ with mlflow.start_run():
     for i in range(len(results['params'])):
 
         param_set = results['params'][i]
-
         mean_score = results['mean_test_score'][i]
 
         with mlflow.start_run(nested=True):
-
             mlflow.log_params(param_set)
-
-            mlflow.log_metric(
-                "mean_f1_score",
-                mean_score
-            )
+            mlflow.log_metric("mean_f1_score", mean_score)
 
     # ======================================
     # Best Model
     # ======================================
 
     best_model = grid_search.best_estimator_
-
-    mlflow.log_params(
-        grid_search.best_params_
-    )
+    mlflow.log_params(grid_search.best_params_)
 
     # ======================================
     # Predictions
     # ======================================
 
     y_pred_train = best_model.predict(Xtrain)
-
-    y_pred_test = best_model.predict(Xtest)
+    y_pred_test  = best_model.predict(Xtest)
 
     # ======================================
     # Evaluation Metrics
     # ======================================
 
-    train_accuracy = accuracy_score(
-        ytrain,
-        y_pred_train
-    )
-
-    test_accuracy = accuracy_score(
-        ytest,
-        y_pred_test
-    )
-
-    precision = precision_score(
-        ytest,
-        y_pred_test
-    )
-
-    recall = recall_score(
-        ytest,
-        y_pred_test
-    )
-
-    f1 = f1_score(
-        ytest,
-        y_pred_test
-    )
+    train_accuracy = accuracy_score(ytrain, y_pred_train)
+    test_accuracy  = accuracy_score(ytest, y_pred_test)
+    precision      = precision_score(ytest, y_pred_test)
+    recall         = recall_score(ytest, y_pred_test)
+    f1             = f1_score(ytest, y_pred_test)
 
     # ======================================
     # Log Metrics in MLflow
     # ======================================
 
     mlflow.log_metrics({
-
         "train_accuracy": train_accuracy,
-
-        "test_accuracy": test_accuracy,
-
-        "precision": precision,
-
-        "recall": recall,
-
-        "f1_score": f1
+        "test_accuracy":  test_accuracy,
+        "precision":      precision,
+        "recall":         recall,
+        "f1_score":       f1
     })
 
     # ======================================
@@ -275,133 +207,69 @@ with mlflow.start_run():
     # ======================================
 
     print("\nBest Parameters:")
-
     print(grid_search.best_params_)
 
     print("\nModel Performance:")
-
     print(f"Train Accuracy : {train_accuracy:.4f}")
-
     print(f"Test Accuracy  : {test_accuracy:.4f}")
-
     print(f"Precision      : {precision:.4f}")
-
     print(f"Recall         : {recall:.4f}")
-
     print(f"F1 Score       : {f1:.4f}")
 
     print("\nClassification Report:\n")
-
-    print(
-        classification_report(
-            ytest,
-            y_pred_test
-        )
-    )
+    print(classification_report(ytest, y_pred_test))
 
     # ======================================
     # Save Best Model
     # ======================================
 
-    os.makedirs(
-        "tourism_project/models",
-        exist_ok=True
-    )
+    os.makedirs("tourism_project/models", exist_ok=True)
 
-    model_path = (
-        "tourism_project/models/"
-        "best_tourism_model.pkl"
-    )
+    model_path = "tourism_project/models/best_tourism_model.pkl"
 
-    joblib.dump(
-        best_model,
-        model_path
-    )
-
-    print(
-        "\nBest model saved successfully!"
-    )
+    joblib.dump(best_model, model_path)
+    print("\nBest model saved successfully!")
 
     # ======================================
-    # Log Model Artifact
+    # Log Model Artifact in MLflow
     # ======================================
 
-    mlflow.log_artifact(
-        model_path,
-        artifact_path="model"
-    )
+    mlflow.log_artifact(model_path, artifact_path="model")
 
     # ======================================
-    # Hugging Face Model Repo
+    # Create Hugging Face Model Repository
     # ======================================
 
-    repo_id = (
-        "RahulGolande/"
-        "tourism-package-prediction-model"
-    )
-
+    model_repo_id = "RahulGolande/tourism-package-prediction-model"
     repo_type = "model"
 
-    # ======================================
-    # Create Model Repository
-    # ======================================
-
     try:
-
-        api.repo_info(
-            repo_id=repo_id,
-            repo_type=repo_type
-        )
-
-        print(
-            f"Model repository "
-            f"'{repo_id}' already exists."
-        )
+        api.repo_info(repo_id=model_repo_id, repo_type=repo_type)
+        print(f"Model repository '{model_repo_id}' already exists.")
 
     except RepositoryNotFoundError:
-
-        print(
-            f"Model repository "
-            f"'{repo_id}' not found."
-        )
-
-        print(
-            "Creating new model repository..."
-        )
+        print(f"Model repository '{model_repo_id}' not found.")
+        print("Creating new model repository...")
 
         create_repo(
-            repo_id=repo_id,
+            repo_id=model_repo_id,
             repo_type=repo_type,
             private=False,
             token=os.getenv("HF_TOKEN")
         )
-
-        print(
-            f"Model repository "
-            f"'{repo_id}' created successfully!"
-        )
+        print(f"Model repository '{model_repo_id}' created successfully!")
 
     # ======================================
-    # Upload Best Model
+    # Upload Best Model to Hugging Face
     # ======================================
 
     api.upload_file(
-
         path_or_fileobj=model_path,
-
         path_in_repo="best_tourism_model.pkl",
-
-        repo_id=repo_id,
-
+        repo_id=model_repo_id,
         repo_type=repo_type
     )
 
-    print(
-        "\nBest model uploaded "
-        "to Hugging Face successfully!"
-    )
+    print("\nBest model uploaded to Hugging Face successfully!")
 
-print(
-    "\nExperiment tracking completed "
-    "successfully!"
-)
+print("\nExperiment tracking completed successfully!")

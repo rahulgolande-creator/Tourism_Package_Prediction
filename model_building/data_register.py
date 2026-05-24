@@ -7,7 +7,7 @@ import os
 # Hugging Face Dataset Details
 # -----------------------------
 
-repo_id = "<---repo id---->/tourism-package-prediction"
+repo_id = "RahulGolande/tourism-package-prediction"   # FIXED: was placeholder
 repo_type = "dataset"
 
 # -----------------------------
@@ -32,7 +32,8 @@ except RepositoryNotFoundError:
     create_repo(
         repo_id=repo_id,
         repo_type=repo_type,
-        private=False
+        private=False,
+        token=os.getenv("HF_TOKEN")
     )
 
     print(f"Dataset repository '{repo_id}' created successfully!")

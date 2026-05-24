@@ -7,9 +7,8 @@ import pandas as pd
 import os
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-
 from huggingface_hub import HfApi
+from huggingface_hub.utils import RepositoryNotFoundError
 
 # ==========================================
 # Hugging Face Details
@@ -20,15 +19,18 @@ repo_id = "RahulGolande/tourism-package-prediction"
 api = HfApi(token=os.getenv("HF_TOKEN"))
 
 # ==========================================
-# Load Dataset Locally
+# Load Dataset Directly from Hugging Face
+# (Rubric requirement: load from HF data space)
 # ==========================================
 
-DATASET_PATH = "tourism_project/data/tourism.csv"
+hf_csv_url = (
+    f"https://huggingface.co/datasets/{repo_id}"
+    "/resolve/main/tourism.csv"
+)
 
-df = pd.read_csv(DATASET_PATH)
+df = pd.read_csv(hf_csv_url)
 
-print("Dataset loaded successfully!")
-
+print("Dataset loaded from Hugging Face successfully!")
 print("Dataset Shape:", df.shape)
 
 # ==========================================
@@ -39,21 +41,23 @@ df.drop_duplicates(inplace=True)
 
 # ==========================================
 # Drop Unnecessary Columns
+# (Unnamed: 0 is a leftover index; CustomerID is an ID column)
 # ==========================================
 
-df.drop(columns=['CustomerID'], inplace=True)
+cols_to_drop = [col for col in ['Unnamed: 0', 'CustomerID'] if col in df.columns]
+df.drop(columns=cols_to_drop, inplace=True)
 
 # ==========================================
 # Handle Missing Values
 # ==========================================
 
-# Numerical columns
+# Numerical columns — fill with median
 num_cols = df.select_dtypes(include=['int64', 'float64']).columns
 
 for col in num_cols:
     df[col] = df[col].fillna(df[col].median())
 
-# Categorical columns
+# Categorical columns — fill with mode
 cat_cols = df.select_dtypes(include=['object']).columns
 
 for col in cat_cols:
@@ -61,25 +65,9 @@ for col in cat_cols:
 
 print("Missing values handled successfully!")
 
-# ==========================================
-# Encode Categorical Variables
-# ==========================================
-
-label_encoder = LabelEncoder()
-
-categorical_cols = [
-    'TypeofContact',
-    'Occupation',
-    'Gender',
-    'ProductPitched',
-    'MaritalStatus',
-    'Designation'
-]
-
-for col in categorical_cols:
-    df[col] = label_encoder.fit_transform(df[col])
-
-print("Categorical encoding completed!")
+# NOTE: Categorical columns are kept as strings.
+# Encoding is handled inside the sklearn pipeline in train.py
+# using OneHotEncoder — do NOT LabelEncode here.
 
 # ==========================================
 # Define Features and Target
@@ -88,7 +76,6 @@ print("Categorical encoding completed!")
 target_col = "ProdTaken"
 
 X = df.drop(columns=[target_col])
-
 y = df[target_col]
 
 # ==========================================
@@ -104,35 +91,23 @@ Xtrain, Xtest, ytrain, ytest = train_test_split(
 )
 
 print("Train-Test Split Completed!")
+print(f"Train size: {Xtrain.shape}, Test size: {Xtest.shape}")
 
 # ==========================================
-# Save Processed Files
+# Save Processed Files Locally
 # ==========================================
 
-Xtrain.to_csv(
-    "tourism_project/data/Xtrain.csv",
-    index=False
-)
+os.makedirs("tourism_project/data", exist_ok=True)
 
-Xtest.to_csv(
-    "tourism_project/data/Xtest.csv",
-    index=False
-)
-
-ytrain.to_csv(
-    "tourism_project/data/ytrain.csv",
-    index=False
-)
-
-ytest.to_csv(
-    "tourism_project/data/ytest.csv",
-    index=False
-)
+Xtrain.to_csv("tourism_project/data/Xtrain.csv", index=False)
+Xtest.to_csv("tourism_project/data/Xtest.csv", index=False)
+ytrain.to_csv("tourism_project/data/ytrain.csv", index=False)
+ytest.to_csv("tourism_project/data/ytest.csv", index=False)
 
 print("Processed datasets saved locally!")
 
 # ==========================================
-# Upload Processed Files to HF
+# Upload Processed Files back to HF
 # ==========================================
 
 files = [
@@ -143,14 +118,12 @@ files = [
 ]
 
 for file_path in files:
-
     api.upload_file(
         path_or_fileobj=file_path,
         path_in_repo=file_path.split("/")[-1],
         repo_id=repo_id,
         repo_type="dataset"
     )
-
     print(f"{file_path} uploaded successfully!")
 
-print("All processed datasets uploaded successfully!")
+print("All processed datasets uploaded to Hugging Face successfully!")
