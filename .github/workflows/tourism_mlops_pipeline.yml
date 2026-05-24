@@ -1,0 +1,130 @@
+
+name: Tourism Package Prediction MLOps Pipeline
+
+# ==========================================
+# Workflow Trigger
+# ==========================================
+
+on:
+
+  push:
+
+    branches:
+      - main
+
+# ==========================================
+# Jobs Definition
+# ==========================================
+
+jobs:
+
+  # ========================================
+  # Dataset Registration
+  # ========================================
+
+  register-dataset:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+
+        run: pip install -r tourism_project/requirements.txt
+
+      - name: Upload Dataset to Hugging Face
+
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+        run: python tourism_project/model_building/data_register.py
+
+  # ========================================
+  # Data Preparation
+  # ========================================
+
+  data-preparation:
+
+    needs: register-dataset
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+
+        run: pip install -r tourism_project/requirements.txt
+
+      - name: Run Data Preparation Pipeline
+
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+        run: python tourism_project/model_building/prep.py
+
+  # ========================================
+  # Model Training & Experiment Tracking
+  # ========================================
+
+  model-training:
+
+    needs: data-preparation
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+
+        run: pip install -r tourism_project/requirements.txt
+
+      - name: Start MLflow Tracking Server
+
+        run: |
+
+          nohup mlflow ui --host 0.0.0.0 --port 5000 &
+
+          sleep 5
+
+      - name: Train Model and Track Experiments
+
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+        run: python tourism_project/model_building/train.py
+
+  # ========================================
+  # Deployment Hosting
+  # ========================================
+
+  deploy-hosting:
+
+    needs:
+      [
+        register-dataset,
+        data-preparation,
+        model-training
+      ]
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+
+        run: pip install -r tourism_project/requirements.txt
+
+      - name: Deploy Streamlit App to Hugging Face Space
+
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+        run: python tourism_project/hosting/hosting.py
