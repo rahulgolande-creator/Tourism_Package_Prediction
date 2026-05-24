@@ -1,51 +1,89 @@
 
-from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
-from huggingface_hub import HfApi, create_repo
+# ==========================================
+# IMPORT REQUIRED LIBRARIES
+# ==========================================
+
 import os
+import pandas as pd
 
-# -----------------------------
-# Hugging Face Dataset Details
-# -----------------------------
+from huggingface_hub import HfApi
+from huggingface_hub import create_repo
+from huggingface_hub.utils import RepositoryNotFoundError
 
-repo_id = "RahulGolande/tourism-package-prediction"   # FIXED: was placeholder
-repo_type = "dataset"
+# ==========================================
+# VERIFY HF TOKEN
+# ==========================================
 
-# -----------------------------
-# Initialize API
-# -----------------------------
+HF_TOKEN = os.getenv("HF_TOKEN")
 
-api = HfApi(token=os.getenv("HF_TOKEN"))
+if HF_TOKEN is None:
+    raise Exception(
+        "HF_TOKEN is missing in GitHub Actions Secrets"
+    )
 
-# -----------------------------
-# Check/Create Dataset Repo
-# -----------------------------
+# ==========================================
+# INITIALIZE API
+# ==========================================
+
+api = HfApi(token=HF_TOKEN)
+
+dataset_repo_id = "RahulGolande/tourism-package-prediction"
+
+# ==========================================
+# CREATE DATASET REPO IF NOT EXISTS
+# ==========================================
 
 try:
-    api.repo_info(repo_id=repo_id, repo_type=repo_type)
-    print(f"Dataset repository '{repo_id}' already exists.")
+
+    api.repo_info(
+        repo_id=dataset_repo_id,
+        repo_type="dataset"
+    )
+
+    print("Dataset repository already exists")
 
 except RepositoryNotFoundError:
 
-    print(f"Dataset repository '{repo_id}' not found.")
-    print("Creating new dataset repository...")
-
     create_repo(
-        repo_id=repo_id,
-        repo_type=repo_type,
+        repo_id=dataset_repo_id,
+        repo_type="dataset",
         private=False,
-        token=os.getenv("HF_TOKEN")
+        token=HF_TOKEN
     )
 
-    print(f"Dataset repository '{repo_id}' created successfully!")
+    print("Dataset repository created")
 
-# -----------------------------
-# Upload Dataset Folder
-# -----------------------------
+# ==========================================
+# VERIFY DATASET FILE
+# ==========================================
 
-api.upload_folder(
-    folder_path="tourism_project/data",
-    repo_id=repo_id,
-    repo_type=repo_type
+dataset_path = "tourism_project/data/tourism.csv"
+
+if not os.path.exists(dataset_path):
+
+    raise Exception(
+        f"Dataset file missing: {dataset_path}"
+    )
+
+print("Dataset file verified")
+
+# ==========================================
+# LOAD DATASET
+# ==========================================
+
+df = pd.read_csv(dataset_path)
+
+print(df.head())
+
+# ==========================================
+# UPLOAD DATASET
+# ==========================================
+
+api.upload_file(
+    path_or_fileobj=dataset_path,
+    path_in_repo="tourism.csv",
+    repo_id=dataset_repo_id,
+    repo_type="dataset"
 )
 
-print("Dataset uploaded successfully!")
+print("Dataset uploaded successfully")

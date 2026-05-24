@@ -1,44 +1,59 @@
+if HF_TOKEN is None:
+    raise Exception("HF_TOKEN not found")
 
-from huggingface_hub import HfApi, create_repo
-from huggingface_hub.utils import RepositoryNotFoundError
-import os
-
-# ==========================================
-# Initialize Hugging Face API
-# ==========================================
-
-api = HfApi(token=os.getenv("HF_TOKEN"))
+api = HfApi(token=HF_TOKEN)
 
 space_repo_id = "RahulGolande/tourism-package-prediction-app"
 
 # ==========================================
-# Create HF Space if it doesn't exist
+# Create Space
 # ==========================================
 
 try:
-    api.repo_info(repo_id=space_repo_id, repo_type="space")
-    print(f"Space '{space_repo_id}' already exists.")
+    api.repo_info(
+        repo_id=space_repo_id,
+        repo_type="space"
+    )
+
+    print("Space already exists")
 
 except RepositoryNotFoundError:
-    print(f"Creating Space '{space_repo_id}'...")
+
     create_repo(
         repo_id=space_repo_id,
         repo_type="space",
         space_sdk="docker",
         private=False,
-        token=os.getenv("HF_TOKEN")
+        token=HF_TOKEN
     )
-    print(f"Space '{space_repo_id}' created successfully!")
+
+    print("Space created successfully")
 
 # ==========================================
-# Upload Deployment Folder to HF Space
+# Verify Deployment Files
+# ==========================================
+
+required_files = [
+    "tourism_project/deployment/app.py",
+    "tourism_project/deployment/Dockerfile",
+    "tourism_project/deployment/requirements.txt"
+]
+
+for file in required_files:
+    if not os.path.exists(file):
+        raise Exception(f"Missing deployment file: {file}")
+
+print("All deployment files verified")
+
+# ==========================================
+# Upload Deployment Folder
 # ==========================================
 
 api.upload_folder(
-    folder_path="deployment",
+    folder_path="tourism_project/deployment",
     repo_id=space_repo_id,
     repo_type="space",
     path_in_repo=""
 )
 
-print("Deployment files uploaded to Hugging Face Space successfully!")
+print("Deployment uploaded successfully")
